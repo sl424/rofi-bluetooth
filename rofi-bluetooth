@@ -248,6 +248,19 @@ device_menu() {
     esac
 }
 
+is_connected(){
+    mac=$1 
+    #bluetoothctl info ${addr} | grep Connected: yes
+    #mac=$(echo $device | cut -d ' ' -f 2)
+
+    # Build options
+    if device_connected $mac; then
+	echo -n "■"
+    else
+	echo -n "□"
+    fi
+}
+
 # Opens a rofi menu with current bluetooth status and options to connect
 show_menu() {
     # Get menu options
@@ -256,7 +269,12 @@ show_menu() {
 
         # Human-readable names of devices, one per line
         # If scan is off, will only list paired devices
-        devices=$(bluetoothctl devices | grep Device | cut -d ' ' -f 3-)
+        #devices=$(bluetoothctl devices | grep Device | cut -d ' ' -f 2-)
+	#device_status=$( while read -r addr name; do printf "$name - xxx \n"; done <<< $(echo $devices) )
+  	status=$(bluetoothctl devices | grep Device | cut -d ' ' -f 2-  | 
+		while read addr name; do 
+		    echo -e "$(is_connected ${addr}) ${name}"; 
+		done)
 
         # Get controller flags
         scan=$(scan_on)
@@ -264,14 +282,14 @@ show_menu() {
         discoverable=$(discoverable_on)
 
         # Options passed to rofi
-        options="$devices\n$divider\n$power\n$scan\n$pairable\n$discoverable\nExit"
+        options="$status\n$divider\n$power\n$scan\n$pairable\n$discoverable\nExit"
     else
         power="Power: off"
         options="$power\nExit"
     fi
 
     # Open rofi menu, read chosen option
-    chosen="$(echo -e "$options" | $rofi_command "Bluetooth")"
+    chosen="$(echo -e "$options" | $rofi_command "Bluetooth" | cut -d ' ' -f 2-)"
 
     # Match chosen option to command
     case $chosen in
@@ -292,8 +310,17 @@ show_menu() {
             ;;
         *)
             device=$(bluetoothctl devices | grep "$chosen")
-            # Open a submenu if a device is selected
-            if [[ $device ]]; then device_menu "$device"; fi
+                # Open a submenu if a device is selected
+            if [[ $device ]]; then 
+                m=$(bluetoothctl devices | grep "$chosen" | grep Device | cut -d ' ' -f 2)
+                #toggle_connection $chosen_mac
+                if device_connected $m; then
+                    bluetoothctl disconnect $m
+                else
+                    bluetoothctl connect $m
+                fi
+                device_menu "$device"
+            fi
             ;;
     esac
 }
